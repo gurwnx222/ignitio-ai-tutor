@@ -26,7 +26,10 @@ class graph_state(BaseModel):
 
     # Critic output
     learning_test: dict = Field(default_factory=dict, description="Learning test questions and user responses")
-    test_result: str = Field(default="", description="PASS or FAIL result from critic evaluation")
+    test_result: str = Field(default="", description="PASS, FAIL, FAIL_FINAL, or COMPLETE result from critic evaluation")
+
+    # Assessment feedback for teaching agent (sent after critic evaluates user code)
+    assessment_for_teaching: dict = Field(default_factory=dict, description="Assessment and score sent to teaching agent when user fails test")
 
     # Reflective loop tracking (max 1 retry)
     retry_count: int = Field(default=0, description="Number of teaching retries attempted (max 1)")

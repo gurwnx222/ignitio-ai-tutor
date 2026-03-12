@@ -142,3 +142,45 @@ Respond with ONLY a JSON object (no markdown formatting):
     "concept_3": {{ ... same structure ... }}
 }}
 """
+
+
+# Targeted re-explanation based on specific assessment feedback from critic
+TARGETED_RETRY_PROMPT = """You are a patient teacher helping a student who just failed a coding test.
+
+The student struggled with this concept: {concept_name}
+
+## What They Got Wrong (from assessment)
+{assessment_feedback}
+
+## Previous Explanation They Saw
+{previous_explanation}
+
+## Previous Code Example They Saw
+{previous_code_example}
+
+## Your Task
+
+Provide a TARGETED re-explanation that specifically addresses what they got wrong.
+
+1. **Acknowledge the mistake** - Briefly mention what they missed (1 sentence)
+2. **Fix the misunderstanding** - Focus ONLY on what they got wrong
+3. **New simpler example** - A different angle or simpler code example
+4. **Key takeaway** - One thing they must remember
+
+## Important Rules
+
+- Don't re-explain everything - focus only on the misunderstanding
+- Use a different analogy if the previous one didn't click
+- Show a simpler code example that directly addresses their error
+- Keep it under 80 words total
+- Be encouraging but clear about what was wrong
+
+Respond with ONLY a JSON object (no markdown formatting):
+{{
+    "concept_name": "{concept_name}",
+    "acknowledgment": "What they got wrong in one sentence",
+    "corrected_explanation": "The focused re-explanation",
+    "new_code_example": "Simpler code that addresses their error",
+    "key_takeaway": "One thing to remember"
+}}
+"""

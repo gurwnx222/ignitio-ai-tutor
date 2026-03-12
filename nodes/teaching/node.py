@@ -22,6 +22,7 @@ from nodes.teaching.prompt import (
     EXPLANATION_PROMPT,
     CODE_EXAMPLE_PROMPT,
     SIMPLER_EXPLANATION_PROMPT,
+    TARGETED_RETRY_PROMPT,
 )
 
 
@@ -34,6 +35,7 @@ def teaching_node(state: graph_state) -> dict:
     2. Generate simple, beginner-friendly explanations
     3. Create commented code examples for each concept
     4. On retry (has_retried=True), use simpler explanations
+       - If assessment_for_teaching exists, use targeted re-explanation
 
     Args:
         state: Current graph state with concept_map, meme_text, and retry_count
@@ -45,6 +47,7 @@ def teaching_node(state: graph_state) -> dict:
     meme_text = state.meme_text
     user_query = state.user_query
     has_retried = state.has_retried
+    assessment_for_teaching = state.assessment_for_teaching
 
     # Validate we have concepts to teach
     if not concept_map:
@@ -55,10 +58,21 @@ def teaching_node(state: graph_state) -> dict:
 
     # Choose teaching approach based on retry status
     if has_retried:
-        # Simpler explanations for retry case
-        explanation = _generate_simpler_explanation(concepts_formatted, meme_text)
-        # Use same code examples (no need to regenerate)
-        code_examples = _generate_code_examples(concepts_formatted, meme_text)
+        # Check if we have specific assessment feedback from the critic
+        if assessment_for_teaching and assessment_for_teaching.get("key_misunderstandings"):
+            # Use targeted re-explanation based on what user got wrong
+            explanation = _generate_targeted_explanation(
+                concepts_formatted=concepts_formatted,
+                meme_text=meme_text,
+                assessment_feedback=assessment_for_teaching,
+                previous_explanation=state.explanation,
+                previous_code_examples=state.code_examples
+            )
+            code_examples = state.code_examples  # Keep same code examples
+        else:
+            # Simpler explanations for generic retry case
+            explanation = _generate_simpler_explanation(concepts_formatted, meme_text)
+            code_examples = _generate_code_examples(concepts_formatted, meme_text)
     else:
         # First-time explanation
         explanation = _generate_explanation(concepts_formatted, user_query, meme_text)
@@ -139,6 +153,83 @@ def _generate_simpler_explanation(concepts: str, meme_text: str) -> dict:
 
     response = llm.invoke([HumanMessage(content=prompt)])
     return _parse_json_response(response.content)
+
+
+def _generate_targeted_explanation(
+    concepts_formatted: str,
+    meme_text: str,
+    assessment_feedback: dict,
+    previous_explanation: dict,
+    previous_code_examples: dict
+) -> dict:
+    """
+    Generate targeted re-explanation based on what user got wrong.
+
+    This is called when the critic provides specific feedback about
+    what the user misunderstood.
+
+    Args:
+        concepts_formatted: Formatted concept string
+        meme_text: Generated meme text
+        assessment_feedback: Feedback from critic about what user got wrong
+        previous_explanation: The explanation user saw before
+        previous_code_examples: The code examples user saw before
+
+    Returns:
+        dict: Targeted explanation focusing on user's misunderstandings
+    """
+    llm = get_llm()
+
+    # Get the concept that user failed on
+    concept_name = assessment_feedback.get("concept_name", "")
+    key_misunderstandings = assessment_feedback.get("key_misunderstandings", [])
+    suggestions = assessment_feedback.get("suggested_focus", "")
+
+    # Find the specific concept explanation and code from previous attempt
+    concept_key = None
+    for key, concept in previous_explanation.items():
+        if concept.get("name", "").lower() == concept_name.lower():
+            concept_key = key
+            break
+
+    # Get previous explanation and code for this concept
+    prev_explanation = ""
+    prev_code = ""
+    if concept_key:
+        prev_explanation = json.dumps(previous_explanation.get(concept_key, {}), indent=2)
+        prev_code = previous_code_examples.get(concept_key, {}).get("code", "")
+
+    # Format the assessment feedback for the prompt
+    feedback_str = json.dumps({
+        "concept_tested": concept_name,
+        "misunderstandings": key_misunderstandings,
+        "suggested_focus": suggestions
+    }, indent=2)
+
+    prompt = TARGETED_RETRY_PROMPT.format(
+        concept_name=concept_name,
+        assessment_feedback=feedback_str,
+        previous_explanation=prev_explanation,
+        previous_code_example=prev_code
+    )
+
+    response = llm.invoke([HumanMessage(content=prompt)])
+    targeted_result = _parse_json_response(response.content)
+
+    # Merge targeted explanation with the full explanation dict
+    # Keep other concepts' explanations the same, update only the failed concept
+    result = dict(previous_explanation)  # Copy previous explanations
+    if concept_key and targeted_result:
+        result[concept_key] = {
+            "name": targeted_result.get("concept_name", concept_name),
+            "acknowledgment": targeted_result.get("acknowledgment", ""),
+            "corrected_explanation": targeted_result.get("corrected_explanation", ""),
+            "new_code_example": targeted_result.get("new_code_example", ""),
+            "key_takeaway": targeted_result.get("key_takeaway", ""),
+            "type": "targeted_retry"  # Mark as targeted retry for UI
+        }
+
+    return result
 
 
 def _generate_code_examples(concepts: str, meme_text: str) -> dict:
