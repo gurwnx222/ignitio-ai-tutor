@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/Users/Gurwinder Singh/projects/ignitio-ai-tutor\" && python -m py_compile nodes/teaching/node.py && python -m py_compile nodes/teaching/prompt.py && echo \"Syntax check passed\")"
+    ]
+  }
+}

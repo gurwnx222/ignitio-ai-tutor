@@ -7,7 +7,8 @@ This node:
 """
 
 import json
-from typing import TypedDict, cast
+from typing import Optional
+from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage
 
 from core.llm import get_llm
@@ -19,17 +20,40 @@ from nodes.orchestrator.prompt import (
 )
 
 
-class ValidationResult(TypedDict):
+class ValidationResult(BaseModel):
     """Schema for meme validation response."""
-    is_meme_request: bool
-    reasoning: str
+    is_meme_request: bool = Field(..., description="Whether the query is a meme request")
+    reasoning: str = Field(..., description="Explanation of the validation decision")
 
 
-class SubTasks(TypedDict):
+class BuilderTask(BaseModel):
+    """Schema for builder task."""
+    description: str = Field(default="", description="Description of the builder task")
+    meme_url: str = Field(default="", description="URL of the generated meme")
+    meme_text: str = Field(default="", description="Text used in the meme")
+    concept_map: list = Field(default_factory=list, description="List of concepts for the meme")
+
+
+class TeachingTask(BaseModel):
+    """Schema for teaching task."""
+    description: str = Field(default="", description="Description of the teaching task")
+    explanation_approach: dict = Field(default_factory=dict, description="Approach for explaining concepts")
+    code_examples: dict = Field(default_factory=dict, description="Code examples for teaching")
+
+
+class CriticTask(BaseModel):
+    """Schema for critic task."""
+    description: str = Field(default="", description="Description of the critic task")
+    learning_test: dict = Field(default_factory=dict, description="Learning test questions")
+    reflective_loop: dict = Field(default_factory=dict, description="Reflective loop configuration")
+
+
+class SubTasks(BaseModel):
     """Schema for sub-tasks created by orchestrator."""
-    builder_task: dict
-    teaching_task: dict
-    critic_task: dict
+    is_valid: bool = Field(default=True, description="Whether the meme request is valid")
+    builder_task: Optional[BuilderTask] = Field(default=None, description="Task for the builder agent")
+    teaching_task: Optional[TeachingTask] = Field(default=None, description="Task for the teaching agent")
+    critic_task: Optional[CriticTask] = Field(default=None, description="Task for the critic agent")
 
 
 def orchestrator_node(state: graph_state) -> dict:
@@ -85,10 +109,10 @@ def _parse_json_response(response_content: str, schema: type) -> dict:
 
     Args:
         response_content: Raw string response from LLM
-        schema: Expected schema type for validation
+        schema: Expected schema type for validation (Pydantic model or dict)
 
     Returns:
-        dict: Parsed JSON object
+        dict: Parsed JSON object (or model_dump() if Pydantic model)
     """
     # Clean up response - remove markdown code blocks if present
     content = response_content.strip()
@@ -104,8 +128,13 @@ def _parse_json_response(response_content: str, schema: type) -> dict:
     content = content.strip()
 
     try:
-        return json.loads(content)
-    except json.JSONDecodeError:
+        parsed = json.loads(content)
+        # If schema is a Pydantic model, validate and return as dict
+        if isinstance(schema, type) and issubclass(schema, BaseModel):
+            model_instance = schema.model_validate(parsed)
+            return model_instance.model_dump()
+        return parsed
+    except (json.JSONDecodeError, Exception):
         # Return a default structure if parsing fails
         if schema == ValidationResult:
             return {"is_meme_request": False, "reasoning": "Failed to parse validation response"}

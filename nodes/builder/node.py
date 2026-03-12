@@ -62,56 +62,40 @@ class RateLimiter:
 _rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 
 
-# ============================================================================
-# imgflip API Configuration (PSEUDO CODE - Replace with real credentials)
-# ============================================================================
-# In your .env file, add:
-# IMGFLIP_USERNAME=your_imgflip_username
-# IMGFLIP_PASSWORD=your_imgflip_password
-#
-# Get credentials from: https://imgflip.com/signup
-# API documentation: https://imgflip.com/api
-# ============================================================================
-
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # PSEUDO CODE: Load credentials from environment
-IMGFLIP_USERNAME = os.getenv("IMGFLIP_USERNAME", "YOUR_USERNAME_HERE")
-IMGFLIP_PASSWORD = os.getenv("IMGFLIP_PASSWORD", "YOUR_PASSWORD_HERE")
+IMGFLIP_USERNAME = os.getenv("IMGFLIP_USERNAME")
+IMGFLIP_PASSWORD = os.getenv("IMGFLIP_PASSWORD")
 
 # imgflip API endpoints
 IMGFLIP_CAPTION_URL = "https://api.imgflip.com/caption_image"
 IMGFLIP_TEMPLATES_URL = "https://api.imgflip.com/get_memes"
 
-
-# ============================================================================
-# Popular meme templates (fallback if API unavailable)
-# ============================================================================
+# Popular meme templates (fetched from imgflip API)
 POPULAR_TEMPLATES = {
-    "drake": "181913649",
+    "drake_hotline_bling": "181913649",
+    "drake": "181913649",  # alias
     "distracted_boyfriend": "112126428",
     "two_buttons": "87743020",
-    "change_my_mind": "125649190",
+    "change_my_mind": "129242436",
     "expanding_brain": "93895088",
-    "this_is_fine": "106693458",
-    "surprised_pikachu": "155067846",
-    "drake_hotline_bling": "103580431",
+    "this_is_fine": "55311130",
+    "surprised_pikachu": "155067746",
     "one_does_not_simply": "61579",
     "success_kid": "61544",
+    "roll_safe": "89370399",
+    "monkey_puppet": "148909805",
+    "hide_the_pain_harold": "27813981",
     "bad_luck_brian": "61539",
-    "roll_safe": "137680737",
-    "monkey_puppet": "123622689",
-    "hide_the_pain_harold": "114583149",
-    "stonks": "175540452",
+    "stonks": "155067746",  # using surprised_pikachu as fallback for stonks
 }
 
-
-# ============================================================================
 # Builder Node
-# ============================================================================
+
 def builder_node(state: graph_state) -> dict:
     """
     Builder node that generates a meme via imgflip API.
@@ -182,8 +166,15 @@ def _generate_meme_content(user_query: str) -> dict:
     response = llm.invoke([HumanMessage(content=prompt)])
     content = _parse_json_response(response.content)
 
-    template_name = content.get("template", "drake")
-    template_id = POPULAR_TEMPLATES.get(template_name, POPULAR_TEMPLATES["drake"])
+    # Handle both template name and direct template_id from LLM response
+    template_name = content.get("template", content.get("template_name", "drake"))
+
+    # Check if LLM returned a template_id directly
+    if "template_id" in content and content["template_id"]:
+        template_id = content["template_id"]
+    else:
+        # Map template name to ID
+        template_id = POPULAR_TEMPLATES.get(template_name, POPULAR_TEMPLATES["drake"])
 
     return {
         "template_id": template_id,
@@ -213,7 +204,7 @@ def _call_imgflip_api(
         Exception: If API call fails
     """
     # Validate credentials
-    if IMGFLIP_USERNAME == "YOUR_USERNAME_HERE" or IMGFLIP_PASSWORD == "YOUR_PASSWORD_HERE":
+    if not IMGFLIP_USERNAME or not IMGFLIP_PASSWORD:
         raise ValueError(
             "imgflip credentials not configured. "
             "Set IMGFLIP_USERNAME and IMGFLIP_PASSWORD in .env file. "
