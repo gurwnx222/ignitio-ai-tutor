@@ -34,19 +34,19 @@ def teaching_node(state: graph_state) -> dict:
     1. Extract concept_map from the builder's output
     2. Generate simple, beginner-friendly explanations
     3. Create commented code examples for each concept
-    4. On retry (has_retried=True), use simpler explanations
-       - If assessment_for_teaching exists, use targeted re-explanation
+    4. On retry (detected via assessment_for_teaching), use simpler explanations
+       - If assessment_for_teaching has key_misunderstandings, use targeted re-explanation
+       - Sets has_retried=True to mark that retry has been used
 
     Args:
-        state: Current graph state with concept_map, meme_text, and retry_count
+        state: Current graph state with concept_map, meme_text, and assessment_for_teaching
 
     Returns:
-        dict: Updated state with explanation and code_examples
+        dict: Updated state with explanation, code_examples, and has_retried (on retry)
     """
     concept_map = state.concept_map
     meme_text = state.meme_text
     user_query = state.user_query
-    has_retried = state.has_retried
     assessment_for_teaching = state.assessment_for_teaching
 
     # Validate we have concepts to teach
@@ -56,10 +56,14 @@ def teaching_node(state: graph_state) -> dict:
     # Format concepts for the prompts
     concepts_formatted = _format_concepts(concept_map)
 
-    # Choose teaching approach based on retry status
-    if has_retried:
+    # Choose teaching approach based on whether this is a retry
+    # A retry is triggered by the critic sending assessment_for_teaching
+    is_retry = assessment_for_teaching and assessment_for_teaching.get("concept_name")
+
+    if is_retry:
+        # This is a retry - use targeted or simpler explanations
         # Check if we have specific assessment feedback from the critic
-        if assessment_for_teaching and assessment_for_teaching.get("key_misunderstandings"):
+        if assessment_for_teaching.get("key_misunderstandings"):
             # Use targeted re-explanation based on what user got wrong
             explanation = _generate_targeted_explanation(
                 concepts_formatted=concepts_formatted,
@@ -73,15 +77,22 @@ def teaching_node(state: graph_state) -> dict:
             # Simpler explanations for generic retry case
             explanation = _generate_simpler_explanation(concepts_formatted, meme_text)
             code_examples = _generate_code_examples(concepts_formatted, meme_text)
+
+        # Mark that retry has been used - critic will see this and enforce max 1 retry
+        return {
+            "explanation": explanation,
+            "code_examples": code_examples,
+            "has_retried": True
+        }
     else:
         # First-time explanation
         explanation = _generate_explanation(concepts_formatted, user_query, meme_text)
         code_examples = _generate_code_examples(concepts_formatted, meme_text)
 
-    return {
-        "explanation": explanation,
-        "code_examples": code_examples
-    }
+        return {
+            "explanation": explanation,
+            "code_examples": code_examples
+        }
 
 
 def _format_concepts(concept_map: dict) -> str:

@@ -34,15 +34,19 @@ def critic_node(state: graph_state) -> dict:
     1. After teaching explains a concept, critic generates a coding question
     2. User writes code to answer the question
     3. Critic evaluates the code and decides pass/fail
-    4. If fail and no retry yet: send assessment to teaching, trigger retry
-    5. If fail after retry: move on (max 1 retry enforced)
+    4. If fail (has_retried=False): send assessment to teaching, return FAIL
+       - Teaching will re-explain and set has_retried=True
+    5. If fail (has_retried=True): move on with FAIL_FINAL (max 1 retry enforced)
+
+    Note: has_retried is set by the teaching node, not by this node.
+    This allows the routing to correctly route to teaching on first failure.
 
     Args:
         state: Current graph state with explanation, code_examples, concept_map
 
     Returns:
         dict: Updated state with learning_test results, test_result, and
-              assessment feedback if retry is needed
+              assessment_for_teaching if retry is needed
     """
     # Get current state values
     concept_map = state.concept_map
@@ -107,25 +111,26 @@ def critic_node(state: graph_state) -> dict:
         "attempt": 2 if has_retried else 1
     }
 
-    # Update learning_test with this result
-    updated_learning_test = {**learning_test}
-    updated_learning_test[concept_key] = test_entry
-
     # Determine next action based on pass/fail and retry status
     passed = evaluation.get("passed", False)
 
     if passed:
-        # User passed, move to next concept
+        # User passed, store the result and move to next concept
+        updated_learning_test = {**learning_test}
+        updated_learning_test[concept_key] = test_entry
         return {
             "learning_test": updated_learning_test,
             "test_result": "PASS",
-            "retry_count": state.retry_count,  # Reset for next concept
-            "has_retried": False  # Reset for next concept
+            "retry_count": state.retry_count,
+            "has_retried": False,  # Reset for next concept
+            "assessment_for_teaching": {}  # Clear assessment after pass
         }
     else:
         # User failed
         if not has_retried:
             # First failure - prepare for retry
+            # DO NOT store in learning_test yet - concept will be re-tested after teaching
+            # DO NOT set has_retried here - teaching will set it when retry runs
             assessment_summary = _create_assessment_summary(
                 concept_name=concept_data.get("name", concept_key),
                 attempt_number=1,
@@ -135,19 +140,22 @@ def critic_node(state: graph_state) -> dict:
             )
 
             return {
-                "learning_test": updated_learning_test,
+                "learning_test": learning_test,  # Keep original, don't add failed test
                 "test_result": "FAIL",
-                "retry_count": state.retry_count + 1,
-                "has_retried": True,
+                "retry_count": state.retry_count,  # Don't increment here
+                "has_retried": False,  # Keep False so routing goes to teaching
                 "assessment_for_teaching": assessment_summary
             }
         else:
-            # Second failure - move on (max 1 retry)
+            # Second failure - store the final result and move on (max 1 retry)
+            updated_learning_test = {**learning_test}
+            updated_learning_test[concept_key] = test_entry
             return {
                 "learning_test": updated_learning_test,
                 "test_result": "FAIL_FINAL",
                 "retry_count": state.retry_count,
-                "has_retried": True
+                "has_retried": True,
+                "assessment_for_teaching": {}  # Clear assessment after final fail
             }
 
 
