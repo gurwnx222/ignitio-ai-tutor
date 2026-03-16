@@ -286,7 +286,7 @@ def _create_assessment_summary(
         detailed_assessment: Detailed assessment from evaluation
 
     Returns:
-        dict: Summary for teaching agent
+        dict: Summary for teaching agent with concept_name for targeted retry
     """
     llm = get_llm()
 
@@ -299,7 +299,20 @@ def _create_assessment_summary(
     )
 
     response = llm.invoke([HumanMessage(content=prompt)])
-    return _parse_json_response(response.content)
+    result = _parse_json_response(response.content)
+
+    # Add concept_name to the result for targeted retry detection
+    # This allows the teaching node to identify which concept needs re-explanation
+    result["concept_name"] = concept_name
+
+    # Ensure key_misunderstandings exists even if LLM returned malformed JSON
+    # This ensures targeted retry can still work if concept_name is present
+    if "key_misunderstandings" not in result:
+        result["key_misunderstandings"] = [
+            f"User struggled with {concept_name} concepts"
+        ]
+
+    return result
 
 
 def _parse_json_response(content: str) -> dict:

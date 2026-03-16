@@ -22,7 +22,8 @@ class graph_state(BaseModel):
 
     # Teaching output
     explanation: dict = Field(default_factory=dict, description="First-principles + Feynman explanations for each concept")
-    code_examples: dict = Field(default_factory=dict, description="Real-world code examples for each concept")
+    code_examples: dict = Field(default_factory=dict, description="Real-world code examples with inline comments for each concept")
+    commented_code_examples: dict = Field(default_factory=dict, description="Comments-only code examples (no actual code) for each concept - serves as a study guide")
 
     # Critic output
     learning_test: dict = Field(default_factory=dict, description="Learning test questions and user responses")

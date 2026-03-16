@@ -330,13 +330,22 @@ async def submit_test(request: TestAnswerRequest) -> TestResultResponse:
 
         # Update state for retry (but don't set has_retried yet - that happens after retry submission)
         state.test_result = test_result
-        state.assessment_for_teaching = {
+
+        # Build assessment_for_teaching with both API and LangGraph compatible structure
+        # Include concept_name for single-concept targeted retry if applicable
+        assessment_for_teaching = {
             "key_misunderstandings": [
                 {"concept": results[k]["concept_name"], "issues": results[k]["feedback"]}
                 for k in failed_concepts
             ],
             "suggested_focus": "Focus on simpler explanations with more analogies"
         }
+
+        # If only one concept failed, include concept_name for potential targeted retry
+        if len(failed_concepts) == 1:
+            assessment_for_teaching["concept_name"] = results[failed_concepts[0]]["concept_name"]
+
+        state.assessment_for_teaching = assessment_for_teaching
         session_manager.update_session(
             session_id=request.session_id,
             state=state,

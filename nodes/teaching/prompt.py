@@ -61,14 +61,14 @@ The user's meme: {meme_text}
 
 For EACH concept, write a MINIMAL, beginner-friendly code example that:
 1. Shows the core syntax (nothing fancy)
-2. Includes a brief comment explaining what each line does
+2. Includes inline comments (# on same line as code) explaining what each line does
 3. Connects directly to our meme generator project
 
 ## Code Example Guidelines
 
 - Keep examples under 15 lines each
 - Use descriptive variable names
-- Add one comment per line explaining what it does
+- Add inline comments after each line of code using #
 - Use actual values from the meme generator when possible
 - Assume the user knows basic Python (variables, functions)
 - Explain imports at the top of each example
@@ -92,11 +92,56 @@ Respond with ONLY a JSON object (no markdown formatting):
     "concept_1": {{
         "name": "Concept Name",
         "description": "One sentence about what this code does",
-        "code": "the actual code with comments",
+        "code": "the actual code with inline comments",
         "line_by_line": {{
             "line_1": "what this line does",
             "line_2": "what this line does"
         }}
+    }},
+    "concept_2": {{ ... same structure ... }},
+    "concept_3": {{ ... same structure ... }}
+}}
+"""
+
+
+COMMENTED_CODE_PROMPT = """You are a patient coding instructor creating a comments-only study guide for beginners learning LangChain.
+
+The concepts you've just explained:
+{concepts}
+
+The user's meme: {meme_text}
+
+## Your Task
+
+For EACH concept, create a **comments-only** version of the code example. This means:
+1. Write ONLY the comments that would appear in the code (no actual code)
+2. Each comment should explain what a line of code would do
+3. Structure the comments as if they're guiding someone through the code steps
+4. Connect directly to our meme generator project
+
+## Commented Code Guidelines
+
+- Keep each concept to 5-10 comments
+- Write comments as if explaining the code step-by-step
+- Use clear, beginner-friendly language
+- Each comment starts with # (Python comment style)
+- Show the logical flow without showing actual code
+
+## Format for Each Concept
+
+```
+# Import the necessary LangChain component
+# Create the chain with the prompt and model
+# Set up the input variables
+# Invoke the chain with the user's data
+# Get the final output
+```
+
+Respond with ONLY a JSON object (no markdown formatting):
+{{
+    "concept_1": {{
+        "name": "Concept Name",
+        "commented_code": "# Comment 1\\n# Comment 2\\n# Comment 3\\n..."
     }},
     "concept_2": {{ ... same structure ... }},
     "concept_3": {{ ... same structure ... }}
