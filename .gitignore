@@ -11,3 +11,8 @@ wheels/
 
 # env variables
 .env
+test.py
+test_builder.py
+test_critic_retry.py
+Claude.md
+.claude
